@@ -1,0 +1,46 @@
+services:
+  mysql:
+    image: mysql:8.0-debian
+    container_name: hometasking-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: hometasking
+      MYSQL_USER: hometasking
+      MYSQL_PASSWORD: hometasking_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hometasking-backend
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    environment:
+      PORT: 3001
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: hometasking
+      DB_USER: hometasking
+      DB_PASSWORD: hometasking_password
+    ports:
+      - "3001:3001"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hometasking-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8088:80"
+
+volumes:
+  mysql_data:
