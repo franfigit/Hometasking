@@ -32,7 +32,7 @@ export async function sendExternalNotification(
           title,
           message,
           priority: 4,
-          tags: ['house', 'cloud_with_rain'],
+          tags: ['house', 'bell'],
         }),
       });
       if (!res.ok) {
@@ -73,7 +73,7 @@ export async function sendExternalNotification(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          event: 'WEATHER_TASK_TRIGGERED',
+          event: 'TASK_NOTIFICATION',
           title,
           message,
           timestamp: new Date().toISOString(),
@@ -92,42 +92,94 @@ export async function sendExternalNotification(
   return results;
 }
 
-const NOTIFY_COOLDOWN_MS = 12 * 60 * 60 * 1000; // Máximo 1 aviso cada 12 hs por la misma tarea
+const NOTIFY_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hs para clima/stock/a demanda
+
+function isSameCalendarDay(d1: Date, d2: Date): boolean {
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
+}
+
+function isPastTimeOfDay(timeOfDay: string | undefined, now: Date): boolean {
+  if (!timeOfDay) return true;
+  const [hh, mm] = timeOfDay.split(':').map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return true;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return nowMinutes >= hh * 60 + mm;
+}
+
+export async function notifySingleTaskNow(
+  em: EntityManager,
+  task: Task,
+  customMessage?: string
+): Promise<boolean> {
+  const settings = await em.findOne(HouseSettings, { id: 1 });
+  if (!settings) return false;
+
+  const dto = serializeTaskWithStatus(task, new Date(), null);
+  const title = `${task.icon} ${task.title}`;
+  const body = `${customMessage || dto.statusLabel}${task.description ? `\n${task.description}` : ''}`;
+
+  const results = await sendExternalNotification(settings, title, body);
+  if (results.some((r) => r.ok)) {
+    task.lastNotifiedAt = new Date();
+    return true;
+  }
+  return false;
+}
 
 export async function runWeatherCheck(em: EntityManager): Promise<number> {
   const settings = await em.findOne(HouseSettings, { id: 1 });
-  if (!settings || settings.latitude == null || settings.longitude == null) {
-    return 0;
+  if (!settings) return 0;
+
+  let forecast = null;
+  if (settings.latitude != null && settings.longitude != null) {
+    try {
+      forecast = await getWeatherForecast(settings);
+    } catch (err: any) {
+      console.warn('⚠️ Error obteniendo clima en monitor:', err.message || err);
+    }
   }
 
-  const forecast = await getWeatherForecast(settings);
-  if (!forecast) return 0;
-
-  const weatherTasks = await em.find(
+  const allTasks = await em.find(
     Task,
-    { type: TaskType.WEATHER },
+    {},
     { populate: ['assignedResidents', 'zone', 'lastCompletedBy'] }
   );
 
   const now = new Date();
   let notifiedCount = 0;
 
-  for (const task of weatherTasks) {
+  for (const task of allTasks) {
     const dto = serializeTaskWithStatus(task, now, forecast);
     if (!dto.isDueToday) continue;
 
-    const alreadyNotifiedRecently =
-      task.lastWeatherNotifiedAt &&
-      now.getTime() - task.lastWeatherNotifiedAt.getTime() < NOTIFY_COOLDOWN_MS;
+    const lastNotified = task.lastNotifiedAt || task.lastWeatherNotifiedAt;
 
-    if (alreadyNotifiedRecently) continue;
+    if (task.type === TaskType.FIXED_SCHEDULE || task.type === TaskType.INTERVAL) {
+      // Periódicas: máximo 1 aviso por día y respetando timeOfDay si está configurada
+      if (lastNotified && isSameCalendarDay(lastNotified, now)) continue;
+      if (task.type === TaskType.FIXED_SCHEDULE && !isPastTimeOfDay(task.timeOfDay, now)) {
+        continue;
+      }
+    } else {
+      // WEATHER, STOCK, ON_DEMAND: cooldown de 12 hs
+      if (lastNotified && now.getTime() - lastNotified.getTime() < NOTIFY_COOLDOWN_MS) {
+        continue;
+      }
+    }
 
     const title = `${task.icon} ${task.title}`;
     const body = `${dto.statusLabel}${task.description ? `\n${task.description}` : ''}`;
 
     const results = await sendExternalNotification(settings, title, body);
     if (results.some((r) => r.ok)) {
-      task.lastWeatherNotifiedAt = now;
+      task.lastNotifiedAt = now;
+      if (task.type === TaskType.WEATHER) {
+        task.lastWeatherNotifiedAt = now;
+      }
       notifiedCount++;
     }
   }
@@ -146,10 +198,10 @@ export function startWeatherMonitor(orm: MikroORM<MySqlDriver>): void {
     try {
       const notified = await runWeatherCheck(orm.em.fork());
       if (notified > 0) {
-        console.log(`🌦️ Monitor climático: se enviaron ${notified} notificación(es) de tareas.`);
+        console.log(`🔔 Monitor de tareas: se enviaron ${notified} notificación(es).`);
       }
     } catch (err: any) {
-      console.error('⚠️ Error en monitor climático:', err.message || err);
+      console.error('⚠️ Error en monitor de tareas:', err.message || err);
     }
   };
 

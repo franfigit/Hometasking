@@ -38,8 +38,8 @@ export const DashboardPage: React.FC = () => {
     const now = Date.now();
     const COOLDOWN_MS = 12 * 60 * 60 * 1000;
     for (const t of taskList) {
-      if (t.type !== 'WEATHER' || !t.isDueToday) continue;
-      const key = `ht_weather_notif_${t.id}`;
+      if (!t.isDueToday) continue;
+      const key = `ht_task_notif_${t.id}`;
       const last = Number(localStorage.getItem(key) || '0');
       if (now - last < COOLDOWN_MS) continue;
 

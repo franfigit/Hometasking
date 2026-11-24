@@ -13,7 +13,11 @@ import {
   invalidateWeatherCache,
   searchCities,
 } from '../services/weatherService';
-import { runWeatherCheck, sendExternalNotification } from '../services/notificationService';
+import {
+  notifySingleTaskNow,
+  runWeatherCheck,
+  sendExternalNotification,
+} from '../services/notificationService';
 
 const router = Router();
 
@@ -451,6 +455,7 @@ router.post('/tasks/:id/complete', async (req, res) => {
     task.lastCompletedAt = new Date();
     task.lastCompletedBy = resident;
     task.isPendingManual = false;
+    task.lastNotifiedAt = undefined;
 
     let action = TaskLogAction.COMPLETED;
     if (task.type === TaskType.STOCK) {
@@ -506,6 +511,7 @@ router.post('/tasks/:id/flag-pending', async (req, res) => {
       createdAt: new Date(),
     });
 
+    await notifySingleTaskNow(em, task, `Marcada como pendiente por ${resident.name}`);
     await em.persistAndFlush(log);
     res.json({
       task: serializeTaskWithStatus(task),
@@ -557,6 +563,11 @@ router.post('/tasks/:id/stock', async (req, res) => {
     }
 
     task.currentStock = newStock;
+
+    const minThreshold = task.minThreshold ?? 1;
+    if (previousStock > minThreshold && newStock <= minThreshold) {
+      await notifySingleTaskNow(em, task);
+    }
 
     const log = em.create(TaskLog, {
       task,

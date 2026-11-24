@@ -96,6 +96,9 @@ export class Task {
   @Property({ nullable: true })
   lastWeatherNotifiedAt?: Date; // evita re-enviar notificaciones externas repetidas
 
+  @Property({ nullable: true })
+  lastNotifiedAt?: Date; // timestamp de última notificación externa para cualquier tipo de tarea
+
   // Estado manual (para ON_DEMAND o cuando un residente escanea QR y marca "Falta hacer")
   @Property({ default: false })
   isPendingManual: boolean = false;
