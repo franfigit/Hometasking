@@ -22,14 +22,18 @@ export async function sendExternalNotification(
     const base = (settings.ntfyServerUrl || 'https://ntfy.sh').replace(/\/+$/, '');
     const topic = settings.ntfyTopic.trim().replace(/^\/+/, '');
     try {
-      const res = await fetch(`${base}/${encodeURIComponent(topic)}`, {
+      const res = await fetch(base, {
         method: 'POST',
         headers: {
-          Title: title,
-          Priority: 'high',
-          Tags: 'house,cloud_with_rain',
+          'Content-Type': 'application/json',
         },
-        body: message,
+        body: JSON.stringify({
+          topic,
+          title,
+          message,
+          priority: 4,
+          tags: ['house', 'cloud_with_rain'],
+        }),
       });
       if (!res.ok) {
         results.push({ channel: 'ntfy', ok: false, error: `HTTP ${res.status}` });
