@@ -1,7 +1,7 @@
 import { EntityManager } from '@mikro-orm/mysql';
 import { Resident, ResidentRole } from './entities/Resident';
 import { Zone } from './entities/Zone';
-import { Task, TaskType, AssignmentType } from './entities/Task';
+import { Task, TaskType, AssignmentType, WeatherCondition } from './entities/Task';
 
 export async function seedDatabaseIfEmpty(em: EntityManager): Promise<void> {
   const count = await em.count(Resident);
@@ -154,6 +154,23 @@ export async function seedDatabaseIfEmpty(em: EntityManager): Promise<void> {
     createdAt: new Date(),
   });
 
+  const taskCanaletas = em.create(Task, {
+    title: 'Repasar canaletas antes de lluvia',
+    description: 'Limpiar hojas y suciedad de las canaletas para evitar que se rebalsen cuando llueva.',
+    icon: '🌧️',
+    points: 4,
+    type: TaskType.WEATHER,
+    weatherCondition: WeatherCondition.RAIN_FORECAST,
+    weatherLeadHours: 24,
+    weatherMinProbability: 50,
+    weatherCooldownDays: 3,
+    isPendingManual: false,
+    assignmentType: AssignmentType.ALL,
+    zone: zonePatioLavadero,
+    qrCode: 'TASK-REPASAR-CANALETAS',
+    createdAt: new Date(),
+  });
+
   await em.persistAndFlush([
     admin,
     pilar,
@@ -167,6 +184,7 @@ export async function seedDatabaseIfEmpty(em: EntityManager): Promise<void> {
     taskMuebles,
     taskRopa,
     taskBasura,
+    taskCanaletas,
   ]);
 
   console.log('✅ Datos iniciales creados con éxito.');

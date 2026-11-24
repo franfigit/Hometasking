@@ -1,4 +1,5 @@
-import { Task, TaskType, AssignmentType } from '../entities/Task';
+import { Task, TaskType, AssignmentType, WeatherCondition } from '../entities/Task';
+import { WeatherForecast, evaluateWeatherCondition } from './weatherService';
 
 export interface TaskStatusDTO {
   id: number;
@@ -14,6 +15,12 @@ export interface TaskStatusDTO {
   minThreshold?: number;
   maxStock?: number;
   unitName?: string;
+  weatherCondition?: WeatherCondition;
+  weatherLeadHours?: number;
+  weatherMinProbability?: number;
+  weatherThresholdValue?: number;
+  weatherCooldownDays?: number;
+  weatherTriggerReason?: string;
   isPendingManual: boolean;
   assignmentType: AssignmentType;
   assignedResidents: {
@@ -58,7 +65,11 @@ function diffCalendarDays(from: Date, to: Date): number {
   return Math.round((end.getTime() - start.getTime()) / msPerDay);
 }
 
-export function serializeTaskWithStatus(task: Task, now: Date = new Date()): TaskStatusDTO {
+export function serializeTaskWithStatus(
+  task: Task,
+  now: Date = new Date(),
+  forecast: WeatherForecast | null = null
+): TaskStatusDTO {
   const completedToday = task.lastCompletedAt
     ? isSameCalendarDay(task.lastCompletedAt, now)
     : false;
@@ -77,6 +88,7 @@ export function serializeTaskWithStatus(task: Task, now: Date = new Date()): Tas
   let isDueToday = false;
   let isUrgent = false;
   let statusLabel = 'Al día';
+  let weatherTriggerReason: string | undefined;
 
   if (task.type === TaskType.STOCK) {
     const current = task.currentStock ?? 0;
@@ -146,6 +158,32 @@ export function serializeTaskWithStatus(task: Task, now: Date = new Date()): Tas
       isDueToday = false;
       statusLabel = 'A demanda (sin pedido activo)';
     }
+  } else if (task.type === TaskType.WEATHER) {
+    const cooldownDays = task.weatherCooldownDays ?? 3;
+    const inCooldown = daysSince !== undefined && daysSince < cooldownDays;
+
+    if (task.isPendingManual) {
+      isDueToday = true;
+      isUrgent = true;
+      statusLabel = 'Marcada como pendiente';
+    } else if (completedToday) {
+      isDueToday = false;
+      statusLabel = 'Completada hoy (al día)';
+    } else if (inCooldown) {
+      isDueToday = false;
+      statusLabel = `Completada hace ${daysSince} día(s) (al día)`;
+    } else {
+      const evaluation = evaluateWeatherCondition(task, forecast, now);
+      if (evaluation.triggered) {
+        isDueToday = true;
+        isUrgent = true;
+        statusLabel = evaluation.summary;
+        weatherTriggerReason = evaluation.summary;
+      } else {
+        isDueToday = false;
+        statusLabel = evaluation.summary;
+      }
+    }
   }
 
   return {
@@ -162,6 +200,12 @@ export function serializeTaskWithStatus(task: Task, now: Date = new Date()): Tas
     minThreshold: task.minThreshold,
     maxStock: task.maxStock,
     unitName: task.unitName,
+    weatherCondition: task.weatherCondition,
+    weatherLeadHours: task.weatherLeadHours,
+    weatherMinProbability: task.weatherMinProbability,
+    weatherThresholdValue: task.weatherThresholdValue,
+    weatherCooldownDays: task.weatherCooldownDays,
+    weatherTriggerReason,
     isPendingManual: task.isPendingManual,
     assignmentType: task.assignmentType,
     assignedResidents: task.assignedResidents.getItems().map((r) => ({

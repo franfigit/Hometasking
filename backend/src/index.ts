@@ -7,6 +7,7 @@ import { MySqlDriver } from '@mikro-orm/mysql';
 import mikroOrmConfig from './mikro-orm.config';
 import apiRoutes from './routes/api';
 import { seedDatabaseIfEmpty } from './seed';
+import { startWeatherMonitor } from './services/notificationService';
 
 dotenv.config();
 
@@ -53,6 +54,7 @@ async function bootstrap() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Hometasking Backend corriendo en http://0.0.0.0:${PORT}`);
+    startWeatherMonitor(orm);
   });
 }
 

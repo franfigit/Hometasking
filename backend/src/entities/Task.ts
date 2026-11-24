@@ -15,6 +15,15 @@ export enum TaskType {
   INTERVAL = 'INTERVAL',             // Se repite cada N días desde que se completó por última vez
   STOCK = 'STOCK',                   // Control por contador / umbral (ej. bidones de agua)
   ON_DEMAND = 'ON_DEMAND',           // Se activa manualmente cuando hace falta
+  WEATHER = 'WEATHER',               // Se activa automáticamente según pronóstico del clima
+}
+
+export enum WeatherCondition {
+  RAIN_FORECAST = 'RAIN_FORECAST',     // Lluvia / llovizna / chaparrón próximo
+  STORM_FORECAST = 'STORM_FORECAST',   // Tormenta eléctrica o lluvia intensa
+  HIGH_WIND = 'HIGH_WIND',             // Viento fuerte (>= umbral km/h)
+  EXTREME_HEAT = 'EXTREME_HEAT',       // Calor extremo (>= umbral °C)
+  FROST_OR_COLD = 'FROST_OR_COLD',     // Frío / helada (<= umbral °C)
 }
 
 export enum AssignmentType {
@@ -67,6 +76,25 @@ export class Task {
 
   @Property({ nullable: true })
   unitName?: string; // ej. "bidones llenos"
+
+  // Para WEATHER (tareas activadas por pronóstico climático):
+  @Enum({ items: () => WeatherCondition, nullable: true })
+  weatherCondition?: WeatherCondition;
+
+  @Property({ nullable: true })
+  weatherLeadHours?: number; // ej. 24 = avisar con 24h de anticipación
+
+  @Property({ nullable: true })
+  weatherMinProbability?: number; // ej. 50 (%) para lluvia
+
+  @Property({ nullable: true })
+  weatherThresholdValue?: number; // umbral en km/h (viento) o °C (calor/frío)
+
+  @Property({ nullable: true })
+  weatherCooldownDays?: number; // días de espera tras completar antes de volver a activarse
+
+  @Property({ nullable: true })
+  lastWeatherNotifiedAt?: Date; // evita re-enviar notificaciones externas repetidas
 
   // Estado manual (para ON_DEMAND o cuando un residente escanea QR y marca "Falta hacer")
   @Property({ default: false })

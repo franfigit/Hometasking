@@ -10,7 +10,13 @@ export interface Resident {
   hasPin?: boolean;
 }
 
-export type TaskType = 'FIXED_SCHEDULE' | 'INTERVAL' | 'STOCK' | 'ON_DEMAND';
+export type TaskType = 'FIXED_SCHEDULE' | 'INTERVAL' | 'STOCK' | 'ON_DEMAND' | 'WEATHER';
+export type WeatherCondition =
+  | 'RAIN_FORECAST'
+  | 'STORM_FORECAST'
+  | 'HIGH_WIND'
+  | 'EXTREME_HEAT'
+  | 'FROST_OR_COLD';
 export type AssignmentType = 'ALL' | 'SINGLE' | 'GROUP';
 
 export interface Zone {
@@ -36,6 +42,12 @@ export interface TaskItem {
   minThreshold?: number;
   maxStock?: number;
   unitName?: string;
+  weatherCondition?: WeatherCondition;
+  weatherLeadHours?: number;
+  weatherMinProbability?: number;
+  weatherThresholdValue?: number;
+  weatherCooldownDays?: number;
+  weatherTriggerReason?: string;
   isPendingManual: boolean;
   assignmentType: AssignmentType;
   assignedResidents: {
@@ -182,4 +194,83 @@ export const api = {
     >(`/qr/${encodeURIComponent(code)}`),
 
   getStats: (days: number = 7) => request<StatsResponse>(`/stats?days=${days}`),
+
+  getWeather: (refresh = false) =>
+    request<WeatherResponse>(`/weather${refresh ? '?refresh=1' : ''}`),
+  searchCities: (q: string) =>
+    request<CitySearchResult[]>(`/weather/search?q=${encodeURIComponent(q)}`),
+  getSettings: () => request<HouseSettings>('/settings'),
+  updateSettings: (payload: Partial<HouseSettings> & { telegramBotToken?: string }) =>
+    request<HouseSettings>('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  testNotification: () =>
+    request<{ results: { channel: string; ok: boolean; error?: string }[] }>(
+      '/settings/test-notification',
+      { method: 'POST' }
+    ),
 };
+
+export interface CitySearchResult {
+  id: number;
+  name: string;
+  admin1?: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  label: string;
+}
+
+export interface WeatherDailyPoint {
+  date: string;
+  weatherCode: number;
+  description: string;
+  icon: string;
+  tempMax: number;
+  tempMin: number;
+  precipitationProbabilityMax: number;
+  precipitationSum: number;
+  windSpeedMax: number;
+}
+
+export interface WeatherForecast {
+  locationName: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  fetchedAt: string;
+  current: {
+    temperature: number;
+    apparentTemperature: number;
+    precipitation: number;
+    windSpeed: number;
+    weatherCode: number;
+    description: string;
+    icon: string;
+    isDay: boolean;
+    time: string;
+  };
+  daily: WeatherDailyPoint[];
+}
+
+export interface WeatherResponse {
+  configured: boolean;
+  forecast: WeatherForecast | null;
+}
+
+export interface HouseSettings {
+  locationName: string;
+  latitude: number | null;
+  longitude: number | null;
+  timezone: string;
+  ntfyEnabled: boolean;
+  ntfyServerUrl: string;
+  ntfyTopic: string;
+  telegramEnabled: boolean;
+  hasTelegramToken: boolean;
+  telegramChatId: string;
+  webhookEnabled: boolean;
+  webhookUrl: string;
+}

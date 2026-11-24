@@ -11,12 +11,18 @@ import {
   Clock,
   Users,
 } from 'lucide-react';
-import { TaskItem, api } from '../api/client';
+import { TaskItem, WeatherResponse, api } from '../api/client';
 import { useProfile } from '../context/ProfileContext';
+import { WeatherWidget } from '../components/WeatherWidget';
 
 export const DashboardPage: React.FC = () => {
   const { currentResident } = useProfile();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [weather, setWeather] = useState<WeatherResponse | null>(null);
+  const [refreshingWeather, setRefreshingWeather] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>(() =>
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
+  );
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'MINE' | 'ALL'>('MINE');
   const [lastUndo, setLastUndo] = useState<{
@@ -25,14 +31,64 @@ export const DashboardPage: React.FC = () => {
   } | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<number | null>(null);
 
+  const notifyBrowserIfNeeded = (taskList: TaskItem[]) => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+
+    const now = Date.now();
+    const COOLDOWN_MS = 12 * 60 * 60 * 1000;
+    for (const t of taskList) {
+      if (t.type !== 'WEATHER' || !t.isDueToday) continue;
+      const key = `ht_weather_notif_${t.id}`;
+      const last = Number(localStorage.getItem(key) || '0');
+      if (now - last < COOLDOWN_MS) continue;
+
+      new Notification(`${t.icon} ${t.title}`, {
+        body: t.statusLabel,
+      });
+      localStorage.setItem(key, String(now));
+    }
+  };
+
   const loadTasks = async () => {
     try {
-      const data = await api.getTasks();
+      const [data, weatherData] = await Promise.all([
+        api.getTasks(),
+        api.getWeather().catch(() => null),
+      ]);
       setTasks(data);
+      if (weatherData) setWeather(weatherData);
+      notifyBrowserIfNeeded(data);
     } catch (err) {
       console.error('Error al cargar tareas:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefreshWeather = async () => {
+    try {
+      setRefreshingWeather(true);
+      const [weatherData, data] = await Promise.all([
+        api.getWeather(true),
+        api.getTasks(),
+      ]);
+      setWeather(weatherData);
+      setTasks(data);
+      notifyBrowserIfNeeded(data);
+    } catch (err) {
+      console.error('Error al actualizar clima:', err);
+    } finally {
+      setRefreshingWeather(false);
+    }
+  };
+
+  const handleEnableNotif = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    const perm = await Notification.requestPermission();
+    setNotifPermission(perm);
+    if (perm === 'granted') {
+      notifyBrowserIfNeeded(tasks);
     }
   };
 
@@ -144,6 +200,16 @@ export const DashboardPage: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Widget del Clima */}
+      <WeatherWidget
+        weather={weather}
+        triggeredWeatherTasks={filteredTasks.filter((t) => t.type === 'WEATHER' && t.isDueToday)}
+        onRefresh={handleRefreshWeather}
+        refreshing={refreshingWeather}
+        notifPermission={notifPermission}
+        onEnableNotif={handleEnableNotif}
+      />
 
       {/* Cabecera y Filtro */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">

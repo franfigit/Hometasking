@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, ShieldCheck, Trash2, Lock, Edit3, ShieldAlert } from 'lucide-react';
 import { Resident, ResidentRole, api } from '../api/client';
 import { useProfile } from '../context/ProfileContext';
+import { WeatherSettingsCard } from '../components/WeatherSettingsCard';
 
 const AVATARS = ['🧑‍💻', '👩‍🎨', '🧑‍🍳', '🦸', '🧙', '🐱', '🐶', '🦊', '🐼', '🦁'];
 const COLORS = ['#4F46E5', '#EC4899', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6'];
@@ -266,6 +267,9 @@ export const ResidentsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Configuración de Clima y Notificaciones del Hogar */}
+      <WeatherSettingsCard isAdmin={isAdmin} />
     </div>
   );
 };

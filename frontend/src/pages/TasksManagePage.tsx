@@ -3,6 +3,7 @@ import { Plus, Trash2, Edit3, ShieldAlert, FolderPlus } from 'lucide-react';
 import {
   TaskItem,
   TaskType,
+  WeatherCondition,
   AssignmentType,
   Zone,
   api,
@@ -44,6 +45,11 @@ export const TasksManagePage: React.FC = () => {
   const [minThreshold, setMinThreshold] = useState(1);
   const [maxStock, setMaxStock] = useState(4);
   const [unitName, setUnitName] = useState('bidones llenos');
+  const [weatherCondition, setWeatherCondition] = useState<WeatherCondition>('RAIN_FORECAST');
+  const [weatherLeadHours, setWeatherLeadHours] = useState(24);
+  const [weatherMinProbability, setWeatherMinProbability] = useState(50);
+  const [weatherThresholdValue, setWeatherThresholdValue] = useState<number>(40);
+  const [weatherCooldownDays, setWeatherCooldownDays] = useState(3);
   const [assignmentType, setAssignmentType] = useState<AssignmentType>('ALL');
   const [assignedIds, setAssignedIds] = useState<number[]>([]);
   const [zoneId, setZoneId] = useState<number | ''>('');
@@ -85,6 +91,11 @@ export const TasksManagePage: React.FC = () => {
     setMinThreshold(1);
     setMaxStock(4);
     setUnitName('bidones llenos');
+    setWeatherCondition('RAIN_FORECAST');
+    setWeatherLeadHours(24);
+    setWeatherMinProbability(50);
+    setWeatherThresholdValue(40);
+    setWeatherCooldownDays(3);
     setAssignmentType('ALL');
     setAssignedIds([]);
     setZoneId(zones[0]?.id || '');
@@ -105,6 +116,11 @@ export const TasksManagePage: React.FC = () => {
     setMinThreshold(t.minThreshold ?? 1);
     setMaxStock(t.maxStock ?? 4);
     setUnitName(t.unitName || 'unidades');
+    setWeatherCondition(t.weatherCondition || 'RAIN_FORECAST');
+    setWeatherLeadHours(t.weatherLeadHours ?? 24);
+    setWeatherMinProbability(t.weatherMinProbability ?? 50);
+    setWeatherThresholdValue(t.weatherThresholdValue ?? 40);
+    setWeatherCooldownDays(t.weatherCooldownDays ?? 3);
     setAssignmentType(t.assignmentType);
     setAssignedIds(t.assignedResidents.map((r) => r.id));
     setZoneId(t.zone?.id || '');
@@ -142,6 +158,11 @@ export const TasksManagePage: React.FC = () => {
       minThreshold: type === 'STOCK' ? minThreshold : undefined,
       maxStock: type === 'STOCK' ? maxStock : undefined,
       unitName: type === 'STOCK' ? unitName : undefined,
+      weatherCondition: type === 'WEATHER' ? weatherCondition : undefined,
+      weatherLeadHours: type === 'WEATHER' ? weatherLeadHours : undefined,
+      weatherMinProbability: type === 'WEATHER' ? weatherMinProbability : undefined,
+      weatherThresholdValue: type === 'WEATHER' ? weatherThresholdValue : undefined,
+      weatherCooldownDays: type === 'WEATHER' ? weatherCooldownDays : undefined,
       assignmentType,
       assignedResidentIds: assignmentType === 'ALL' ? [] : assignedIds,
       zoneId: zoneId === '' ? null : Number(zoneId),
@@ -444,6 +465,9 @@ export const TasksManagePage: React.FC = () => {
                   <option value="ON_DEMAND">
                     🔔 A demanda (se activa manualmente cuando hace falta)
                   </option>
+                  <option value="WEATHER">
+                    🌦️ Por clima (se activa según pronóstico, ej. antes de lluvia)
+                  </option>
                 </select>
               </div>
 
@@ -556,6 +580,104 @@ export const TasksManagePage: React.FC = () => {
                       placeholder="Ej. bidones llenos"
                       className="w-full py-2 px-3 rounded-xl border border-slate-300 text-sm bg-white"
                     />
+                  </div>
+                </div>
+              )}
+
+              {type === 'WEATHER' && (
+                <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Condición climática
+                      </label>
+                      <select
+                        value={weatherCondition}
+                        onChange={(e) => {
+                          const cond = e.target.value as WeatherCondition;
+                          setWeatherCondition(cond);
+                          if (cond === 'HIGH_WIND') setWeatherThresholdValue(40);
+                          if (cond === 'EXTREME_HEAT') setWeatherThresholdValue(33);
+                          if (cond === 'FROST_OR_COLD') setWeatherThresholdValue(5);
+                        }}
+                        className="w-full py-2 px-3 rounded-xl border border-slate-300 text-xs bg-white font-medium"
+                      >
+                        <option value="RAIN_FORECAST">🌧️ Lluvia próxima</option>
+                        <option value="STORM_FORECAST">⛈️ Tormenta / lluvia fuerte</option>
+                        <option value="HIGH_WIND">💨 Viento fuerte</option>
+                        <option value="EXTREME_HEAT">🔥 Calor extremo</option>
+                        <option value="FROST_OR_COLD">❄️ Frío / Helada</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Anticipación (horas antes)
+                      </label>
+                      <select
+                        value={weatherLeadHours}
+                        onChange={(e) => setWeatherLeadHours(Number(e.target.value))}
+                        className="w-full py-2 px-3 rounded-xl border border-slate-300 text-xs bg-white font-medium"
+                      >
+                        <option value={6}>6 horas antes</option>
+                        <option value={12}>12 horas antes</option>
+                        <option value={24}>24 horas antes (1 día)</option>
+                        <option value={48}>48 horas antes (2 días)</option>
+                        <option value={72}>72 horas antes (3 días)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {weatherCondition === 'RAIN_FORECAST' && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Probabilidad mínima (%)
+                        </label>
+                        <input
+                          type="number"
+                          min={10}
+                          max={100}
+                          value={weatherMinProbability}
+                          onChange={(e) => setWeatherMinProbability(Number(e.target.value))}
+                          className="w-full py-2 px-3 rounded-xl border border-slate-300 text-xs bg-white"
+                        />
+                      </div>
+                    )}
+
+                    {(weatherCondition === 'HIGH_WIND' ||
+                      weatherCondition === 'EXTREME_HEAT' ||
+                      weatherCondition === 'FROST_OR_COLD') && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          {weatherCondition === 'HIGH_WIND'
+                            ? 'Umbral viento (km/h)'
+                            : weatherCondition === 'EXTREME_HEAT'
+                            ? 'Temperatura ≥ (°C)'
+                            : 'Temperatura ≤ (°C)'}
+                        </label>
+                        <input
+                          type="number"
+                          value={weatherThresholdValue}
+                          onChange={(e) => setWeatherThresholdValue(Number(e.target.value))}
+                          className="w-full py-2 px-3 rounded-xl border border-slate-300 text-xs bg-white"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Espera tras completar (días)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        value={weatherCooldownDays}
+                        onChange={(e) => setWeatherCooldownDays(Number(e.target.value))}
+                        className="w-full py-2 px-3 rounded-xl border border-slate-300 text-xs bg-white"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

@@ -4,12 +4,13 @@ import { Resident } from './entities/Resident';
 import { Zone } from './entities/Zone';
 import { Task } from './entities/Task';
 import { TaskLog } from './entities/TaskLog';
+import { HouseSettings } from './entities/HouseSettings';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 export default defineConfig({
-  entities: [Resident, Zone, Task, TaskLog],
+  entities: [Resident, Zone, Task, TaskLog, HouseSettings],
   dbName: process.env.DB_NAME || 'hometasking',
   host: process.env.DB_HOST || '127.0.0.1',
   port: Number(process.env.DB_PORT) || 3306,
