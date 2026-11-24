@@ -1,5 +1,11 @@
 import 'reflect-metadata';
+import dns from 'node:dns';
+import net from 'node:net';
 import express from 'express';
+
+// Evitar fallos de fetch (ETIMEDOUT/ENETUNREACH) en redes sin IPv6 o con RTT alto
+dns.setDefaultResultOrder('ipv4first');
+net.setDefaultAutoSelectFamily(false);
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { MikroORM, RequestContext } from '@mikro-orm/core';
